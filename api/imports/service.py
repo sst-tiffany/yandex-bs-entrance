@@ -12,6 +12,18 @@ class InsertError(Exception):
     ...
 
 
+class PatchCitizenError(Exception):
+    ...
+
+
+class ImportIdNotFound(Exception):
+    ...
+
+
+class SelectError(Exception):
+    ...
+
+
 class MockService:
     def put_citizens(self, data):
         ...
@@ -75,3 +87,116 @@ class Service:
 
         if len(check_df) != sum(check_df['found']):
             raise RelationsError('some relations are not two-sided')
+
+    def patch_citizen(self, import_id, citizen_id, citizen_upd):
+        citizen_ids = self._patch_citizen_check_data_prep(import_id)
+        self._patch_citizen_check_citizen_exists(citizen_id, citizen_ids)
+
+        relatives = self._patch_citizen_relatives_get(citizen_upd)
+        self._patch_citizen_check_relatives_exist(relatives, citizen_ids)
+
+        citizen_info = self._patch_citizen_get_citizen_info(import_id, citizen_id)
+        ex_relatives, new_relatives = self._patch_citizen_analyze_citizen_changes(citizen_info, relatives)
+
+        self._patch_citizen_update_citizen(import_id, citizen_info, citizen_upd)
+
+        if ex_relatives:
+            for ex in ex_relatives:
+                self._patch_citizen_update_relation(import_id, citizen_id, ex, 'remove')
+
+        if new_relatives:
+            for new in new_relatives:
+                self._patch_citizen_update_relation(import_id, citizen_id, new, 'add')
+
+        citizen_info_updated = self._dbm.get_citizen(import_id, citizen_id)
+        return citizen_info_updated
+
+    def _patch_citizen_check_data_prep(self, import_id):
+        try:
+            citizen_ids = self._dbm.get_citizen_ids(import_id)
+        except Exception as err:  # TODO: Exception more detailed
+            raise SelectError(err)
+
+        if not citizen_ids['citizen_ids']:
+            raise PatchCitizenError(f'No such import_id={import_id}')
+
+        citizen_ids = set(citizen_ids['citizen_ids'])
+        return citizen_ids
+
+    def _patch_citizen_check_citizen_exists(self, citizen_id, citizen_ids):
+        if citizen_id not in citizen_ids:
+            raise PatchCitizenError(f'No such citizen_id={citizen_id}')
+
+    def _patch_citizen_relatives_get(self, data):
+        relatives = None
+        if 'relatives' in data:
+            relatives = data['relatives']
+        return relatives
+
+    def _patch_citizen_check_relatives_exist(self, relatives, citizen_ids):
+        if relatives != None and set(relatives) - citizen_ids:
+            raise PatchCitizenError('some relative not found')
+
+    def _patch_citizen_get_citizen_info(self, import_id, citizen_id):
+        citizen_info = self._dbm.get_citizen(import_id, citizen_id)
+        return citizen_info
+
+    def _patch_citizen_analyze_citizen_changes(self, old_citizen_info, relatives):
+        ex_relatives, new_relatives = None, None
+        if relatives != None:
+            old_relatives = old_citizen_info['relatives']
+            ex_relatives = set(old_relatives) - set(relatives)
+            new_relatives = set(relatives) - set(old_relatives)
+
+        return ex_relatives, new_relatives
+
+    def _patch_citizen_update_citizen(self, import_id, citizen_info, citizen_upd):
+        citizen_info.update(citizen_upd)
+        citizen_info.update({'import_id': import_id})
+        self._dbm.update_citizen(citizen_info)
+
+    def _patch_citizen_update_relation(self, import_id, citizen_id, relative_id, mode='add'):
+        for left, right in zip([citizen_id, relative_id], [relative_id, citizen_id]):
+            relation = {
+                'import_id': import_id,
+                'citizen_id': left,
+                'relative': right,
+                'is_active': mode == 'add'
+            }
+            self._dbm.update_relation(relation)
+
+    # endpoint 3: get citizens
+    def get_citizens(self, import_id):
+        import_ids = self._dbm.get_import_ids()
+        if import_id not in import_ids:
+            raise ImportIdNotFound(f'No such import_id={import_id}')
+        try:
+            citizens = self._dbm.get_citizens(import_id)
+        except Exception as err:  # TODO: Exception more detailed
+            raise SelectError(err)
+
+        return citizens
+
+    # endpoint 4: get birthdays
+    def get_birthdays(self, import_id):
+        import_ids = self._dbm.get_import_ids()
+        if import_id not in import_ids:
+            raise ImportIdNotFound(f'No such import_id={import_id}')
+        try:
+            birthdays = self._dbm.get_birthdays(import_id)
+        except Exception as err:  # TODO: Exception more detailed
+            raise SelectError(err)
+
+        return birthdays
+
+    # endpoint 5: get age
+    def get_age(self, import_id):
+        import_ids = self._dbm.get_import_ids()
+        if import_id not in import_ids:
+            raise ImportIdNotFound(f'No such import_id={import_id}')
+        try:
+            age = self._dbm.get_age(import_id)
+        except Exception as err:  # TODO: Exception more detailed
+            raise SelectError(err)
+
+        return age

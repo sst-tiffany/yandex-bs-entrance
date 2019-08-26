@@ -1,4 +1,6 @@
-from marshmallow import Schema, fields, validate, validates_schema, ValidationError
+from datetime import datetime
+
+from marshmallow import Schema, fields, validate, validates_schema, ValidationError, post_load, pre_load
 
 GENDER = frozenset(['male', 'female'])
 
@@ -8,6 +10,7 @@ class TestSchema(Schema):
 
 
 _not_blank = validate.Length(min=1, error='Field cannot be blank')
+_not_empty_list = _not_blank
 
 
 def validate_citizen_id(n):
@@ -15,13 +18,27 @@ def validate_citizen_id(n):
         raise ValidationError("citizen_id must be greater than 0.")
 
 def validate_apartment(n):
-    if n < 1:
+    if n < 0:
         raise ValidationError("apartment must be greater than 1.")
 
 
 def _gender(gender):
     if gender not in GENDER:
         raise ValidationError(f'Unexpected gender {gender}')
+
+
+def _validate_date(date):
+    try:
+        date = datetime.strptime(date, '%d.%m.%Y').date()
+    except ValueError:
+        raise ValidationError(f'Bad date format {date}')
+
+    if date > datetime.now().date():
+        raise ValidationError(f'Future date')
+
+def _not_repeat(alist):
+    if len(set(alist)) < len(alist):
+        raise ValidationError('Repeat relative')
 
 
 class _UnknownRaiseMixin:
@@ -38,7 +55,25 @@ class _UnknownRaiseMixin:
                                    for field in unknown_fields])
 
 
-class Citizen(Schema, _UnknownRaiseMixin):
+class _EmptyPayloadMixin:
+    @pre_load
+    def _empty(self, data):
+        if not data:
+            raise ValidationError('Empty payload')
+
+
+class CitizenBase(Schema, _UnknownRaiseMixin):
+    @pre_load
+    def _relatives2str(self, data):
+        if 'relatives' not in data:
+            return
+        if not isinstance(data['relatives'], list):
+            return
+
+        data['relatives'] = [str(i) for i in data['relatives']]
+
+
+class CitizenPatch(CitizenBase, _EmptyPayloadMixin):
     """
     [{
     'citizen_id': 1,
@@ -52,17 +87,27 @@ class Citizen(Schema, _UnknownRaiseMixin):
     'relatives': [2]
   },]
     """
-
-    citizen_id = fields.Integer(validate=validate_citizen_id)
     town = fields.String(validate=_not_blank)
     street = fields.String(validate=_not_blank)
     building = fields.String(validate=_not_blank)
     apartment = fields.Integer(validate=validate_apartment)
     name = fields.String(validate=_not_blank)
     gender = fields.String(validate=_gender)
-    relatives = fields.List(fields.Integer(validate=validate_citizen_id))
-    birth_date = fields.String()
+    relatives = fields.List(fields.Integer(validate=validate_citizen_id), validate=_not_repeat)
+    birth_date = fields.String(validate=_validate_date)
 
 
-class Import(Schema, _UnknownRaiseMixin):
-    citizens = fields.List(fields.Nested(Citizen))
+class CitizenPost(CitizenBase):
+    citizen_id = fields.Integer(validate=validate_citizen_id, required=True)
+    town = fields.String(validate=_not_blank, required=True)
+    street = fields.String(validate=_not_blank, required=True)
+    building = fields.String(validate=_not_blank, required=True)
+    apartment = fields.Integer(validate=validate_apartment, required=True)
+    name = fields.String(validate=_not_blank, required=True)
+    gender = fields.String(validate=_gender, required=True)
+    relatives = fields.List(fields.Integer(validate=validate_citizen_id), validate=_not_repeat, required=True)
+    birth_date = fields.String(validate=_validate_date, required=True)
+
+
+class Import(Schema, _UnknownRaiseMixin, _EmptyPayloadMixin):
+    citizens = fields.List(fields.Nested(CitizenPost), validate=_not_empty_list)

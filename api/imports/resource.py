@@ -1,24 +1,17 @@
 import logging
 
 from flask import Blueprint, request, jsonify
-from .service import Service, RelationsError
-from .schema import Import as ImportSchema
+from .service import Service, RelationsError, PatchCitizenError, SelectError, ImportIdNotFound
+from .schema import Import as ImportSchema, CitizenPatch as CitizenPatchSchema
 
 
 logger = logging.getLogger(__name__)
 
-endpoint = Blueprint('imports', __name__)
+endpoint = Blueprint('imports', __name__, url_prefix='/imports')
 
 import_schema = ImportSchema()
+citizen_schema = CitizenPatchSchema()
 service = Service()
-
-
-@endpoint.route('/imports', methods=['POST'])
-def imports():
-    if request.method == 'POST':
-        req_body = request.json
-        logger.info(f'req_body={req_body}')
-        return imports_post(req_body)
 
 
 def _jsonify(func):
@@ -46,8 +39,9 @@ def handle_success(res):
     return {"data": res}
 
 
-def imports_post(req_body):
-    data, err = import_schema.load(req_body)
+@endpoint.route('', methods=['POST'])
+def imports():
+    data, err = import_schema.load(request.json)
     if err:
         return handle_err(err), 400
     try:
@@ -58,15 +52,44 @@ def imports_post(req_body):
         return handle_success(resp), 201
 
 
-# def imports_patch(req_body):
-#     data, err = schema.load(req_body)
-#     if err:
-#         return 400, handle_err(err)
-#     try:
-#         resp = service.update_citizen(data)
-#     except RelationsError as err:
-#         return 400, handle_err(err)
-#     except Exception as err:
-#         return 500, INTERNAL_ERROR
-#     else:
-#         return 201, handle_success(resp)
+@endpoint.route('<int:import_id>/citizens', methods=['GET'])
+def citizen_collection(import_id):
+    try:
+        resp = service.get_citizens(import_id)
+    except (SelectError, ImportIdNotFound) as err:
+        return handle_err(err), 400
+    else:
+        return handle_success(resp), 200
+
+
+@endpoint.route('<int:import_id>/citizens/<int:citizen_id>', methods=['PATCH'])
+def citizen(import_id, citizen_id):
+    data, err = citizen_schema.load(request.json)
+    if err:
+        return handle_err(err), 400
+    try:
+        resp = service.patch_citizen(import_id, citizen_id, data)
+    except (PatchCitizenError, SelectError) as err:
+        return handle_err(err), 400
+    else:
+        return handle_success(resp), 200
+
+
+@endpoint.route('<int:import_id>/citizens/birthdays', methods=['GET'])
+def birthdays(import_id):
+    try:
+        resp = service.get_birthdays(import_id)
+    except (SelectError, ImportIdNotFound) as err:
+        return handle_err(err), 400
+    else:
+        return handle_success(resp), 200
+
+
+@endpoint.route('<int:import_id>/towns/stat/percentile/age', methods=['GET'])
+def age(import_id):
+    try:
+        resp = service.get_age(import_id)
+    except (SelectError, ImportIdNotFound) as err:
+        return handle_err(err), 400
+    else:
+        return handle_success(resp), 200
