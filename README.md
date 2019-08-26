@@ -23,7 +23,7 @@ sudo apt install postgresql
 ```
 Start Postgres server:
 ```bash
-service postgresql start
+sudo service postgresql start
 ```
 Switch over to the postgres account on your server by typing:
 ```bash
@@ -44,13 +44,15 @@ GRANT ALL PRIVILEGES ON DATABASE market TO dbm;
 ```
 
 Repeat last commands to create test database with test user.
-Leave this as is (recommended):
+Keep this as is (recommended):
 
 ```bash
 CREATE DATABASE market_test;
 CREATE USER dbm_test WITH ENCRYPTED PASSWORD 'password_test';
 GRANT ALL PRIVILEGES ON DATABASE market_test TO dbm_test;
 ```
+Leave `psql` and `postgres` user. 
+
 
 Create `.env` file with postgres URI. Use password created 
 before for `dbm` user. This file is able to contain other 
@@ -88,14 +90,14 @@ server preferences.
 
 Ensure that supervisor is running after installation:
 ```bash
-service supervisor restart
+sudo service supervisor restart
 ```
-Create `yandex-bs-entrance.conf` file in `/etc/supervisor/conf.d`:
+Create `yandex-bs-entrance.conf` file in `/etc/supervisor/conf.d` with `sudo`:
 ```
 [program:yandex-bs-entrance]
 user = entrant
 directory = /home/entrant/yandex-bs-entrance
-command=uwsgi --ini app.ini
+command=/home/entrant/yandex-bs-entrance/venv/bin/uwsgi --ini app.ini
 autostart=true
 autorestart=true
 stderr_logfile = /home/entrant/yandex-bs-entrance/err.log
@@ -104,7 +106,7 @@ stopsignal=INT
 ```
 Sign in `supervisorctl`:
 ```bash
-supervisorctl
+sudo supervisorctl
 ```
 Reread and update supervisor:
 ```bash
