@@ -1,4 +1,4 @@
-# market-garden
+# yandex-bs-entrance
 
 ## Build
 
@@ -90,16 +90,16 @@ Ensure that supervisor is running after installation:
 ```bash
 service supervisor restart
 ```
-Create `yandex-bc-entrance.conf` file in `/etc/supervisor/conf.d`:
+Create `yandex-bs-entrance.conf` file in `/etc/supervisor/conf.d`:
 ```
-[program:yandex-bc-entrance]
+[program:yandex-bs-entrance]
 user = entrant
-directory = /home/entrant/yandex-bc-entrance
+directory = /home/entrant/yandex-bs-entrance
 command=uwsgi --ini app.ini
 autostart=true
 autorestart=true
-stderr_logfile = /home/entrant/yandex-bc-entrance/err.log
-stdout_logfile = /home/entrant/yandex-bc-entrance/out.log
+stderr_logfile = /home/entrant/yandex-bs-entrance/err.log
+stdout_logfile = /home/entrant/yandex-bs-entrance/out.log
 stopsignal=INT
 ```
 Sign in `supervisorctl`:
@@ -113,6 +113,6 @@ update
 ```
 Start the service:
 ```bash
-start yandex-bc-entrance
+start yandex-bs-entrance
 ```
 API is running on `0.0.0.0:8080`.
